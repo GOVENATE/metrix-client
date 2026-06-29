@@ -1,0 +1,150 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/material.dart';
+import 'package:app_links/app_links.dart';
+import 'package:rate_my_app/rate_my_app.dart';
+import 'package:metrix_client/brand.dart';
+import 'package:metrix_client/geolocation_service.dart';
+import 'package:metrix_client/notification_service.dart';
+import 'package:metrix_client/password_service.dart';
+import 'package:metrix_client/push_service.dart';
+import 'package:metrix_client/quick_actions.dart';
+
+import 'l10n/app_localizations.dart';
+import 'main_screen.dart';
+import 'preferences.dart';
+import 'configuration_service.dart';
+
+final messengerKey = GlobalKey<ScaffoldMessengerState>();
+final navigatorKey = GlobalKey<NavigatorState>();
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  await Preferences.init();
+  await PasswordService.migrate();
+  await GeolocationService.init();
+  await PushService.init();
+  await NotificationService.init();
+  runApp(const MainApp());
+}
+
+class MainApp extends StatefulWidget {
+  const MainApp({super.key});
+
+  @override
+  State<MainApp> createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  RateMyApp rateMyApp = RateMyApp(minDays: 0, minLaunches: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initLinks();
+      await rateMyApp.init();
+      if (mounted && rateMyApp.shouldOpenDialog) {
+        try {
+          await rateMyApp.showRateDialog(context);
+        } catch (error) {
+          developer.log('Failed to show rate dialog', error: error);
+        }
+      }
+    });
+  }
+
+  Future<void> _initLinks() async {
+    final appLinks = AppLinks();
+    final uri = await appLinks.getInitialLink();
+    if (uri != null) {
+      await _handleUri(uri);
+    }
+    appLinks.uriLinkStream.listen(_handleUri);
+  }
+
+  Future<void> _handleUri(Uri uri) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            content: Text(AppLocalizations.of(context)!.configurationMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(AppLocalizations.of(context)!.cancelButton),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(AppLocalizations.of(context)!.okButton),
+              ),
+            ],
+          ),
+    );
+    if (confirmed == true) {
+      await ConfigurationService.applyUri(uri);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: Brand.appName,
+      debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: messengerKey,
+      navigatorKey: navigatorKey,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Brand.green,
+          brightness: Brightness.light,
+        ),
+        scaffoldBackgroundColor: Brand.background,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Brand.background,
+          foregroundColor: Brand.charcoal,
+          surfaceTintColor: Brand.background,
+        ),
+        cardTheme: const CardThemeData(
+          color: Brand.white,
+          surfaceTintColor: Brand.white,
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+        ),
+      ),
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Brand.lime,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: Brand.charcoal,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Brand.charcoal,
+          foregroundColor: Brand.white,
+          surfaceTintColor: Brand.charcoal,
+        ),
+        cardTheme: const CardThemeData(
+          color: Color(0xFF121212),
+          surfaceTintColor: Color(0xFF121212),
+          elevation: 1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+        ),
+      ),
+      home: Stack(children: const [QuickActionsInitializer(), MainScreen()]),
+    );
+  }
+}

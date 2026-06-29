@@ -1,0 +1,56 @@
+name: metrix_client
+description: "Metrix Client"
+publish_to: 'none'
+version: 9.7.20+137
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
+  flutter_background_geolocation: ^5.2.0
+  shared_preferences: ^2.5.5
+  firebase_core: ^4.9.0
+  firebase_messaging: ^16.2.2
+  firebase_analytics: ^12.4.1
+  firebase_crashlytics: ^5.2.2
+  quick_actions: ^1.1.0
+  rate_my_app: ^2.4.0
+  shared_preferences_android: ^2.4.23
+  wakelock_partial_android: ^1.0.1
+  mobile_scanner: ^7.2.0
+  flutter_secure_storage: ^10.2.0
+  app_links: ^7.0.0
+  app_settings: ^7.0.0
+  permission_handler: ^12.0.0
+  flutter_local_notifications: ^19.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/branding/metrix.png
+    - assets/branding/metrix_woks.png
+    - assets/branding/metrix_icon.png
+    - assets/branding/metrix_wordmark.png
+    - assets/branding/memetrix.png
+    - assets/branding/memetrix_icon.png
+    - assets/branding/palette.jpg.jpeg
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/branding/memetrix_icon.png
+  adaptive_icon_background: "#F7F8F4"
+  adaptive_icon_foreground: assets/branding/memetrix_icon.png
+  remove_alpha_ios: true
