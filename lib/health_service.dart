@@ -11,6 +11,7 @@ enum HealthStatus { ok, warning, error }
 
 enum HealthCheckId {
   tracking,
+  deviceId,
   location,
   activity,
   notifications,
@@ -36,6 +37,7 @@ class HealthService {
   /// Reads the current state of every check without prompting the user.
   static Future<List<HealthCheck>> runChecks() async {
     final tracking = await _trackingCheck();
+    final deviceId = _deviceIdCheck();
     final location = await _locationCheck();
     final notifications = await _notificationsCheck();
     final serverUrl = _serverUrlCheck();
@@ -43,6 +45,7 @@ class HealthService {
 
     return [
       tracking,
+      deviceId,
       location,
       if (Platform.isAndroid) await _activityCheck(),
       notifications,
@@ -103,35 +106,33 @@ class HealthService {
     );
   }
 
+  /// Flags a provisional identifier: fresh installs seed a random number so the
+  /// app works out of the box, but the operator must replace it with the real
+  /// 15-digit phone IMEI or positions land under a throwaway device id.
+  static HealthCheck _deviceIdCheck() {
+    final id = Preferences.instance.getString(Preferences.id);
+    final valid = Preferences.isValidImei(id);
+    return HealthCheck(
+      HealthCheckId.deviceId,
+      valid ? HealthStatus.ok : HealthStatus.warning,
+      info: id,
+    );
+  }
+
   static HealthCheck _serverUrlCheck() {
-    final primary = Preferences.instance.getString(Preferences.primaryUrl);
-    final fallback = Preferences.instance.getString(Preferences.fallbackUrl);
-    if (primary == null ||
-        primary.isEmpty ||
-        fallback == null ||
-        fallback.isEmpty) {
-      return const HealthCheck(HealthCheckId.serverUrl, HealthStatus.error);
-    }
-    final isValid = _validServer(primary) && _validServer(fallback);
-    final active =
-        Preferences.instance.getString(Preferences.activeServer) == 'fallback'
-        ? 'Respaldo'
-        : 'Principal';
-    final info = 'Principal: $primary\nRespaldo: $fallback\nActivo: $active';
-    if (!isValid) {
+    final server = Preferences.instance.getString(Preferences.primaryUrl);
+    if (server == null || server.isEmpty || !_validServer(server)) {
       return HealthCheck(
         HealthCheckId.serverUrl,
         HealthStatus.error,
-        info: info,
+        info: server,
       );
     }
-    final matches =
-        _sameServer(primary, Preferences.defaultPrimaryUrl) &&
-        _sameServer(fallback, Preferences.defaultFallbackUrl);
+    final matches = _sameServer(server, Preferences.defaultPrimaryUrl);
     return HealthCheck(
       HealthCheckId.serverUrl,
       matches ? HealthStatus.ok : HealthStatus.warning,
-      info: info,
+      info: server,
     );
   }
 

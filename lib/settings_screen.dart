@@ -7,7 +7,6 @@ import 'package:flutter_background_geolocation/flutter_background_geolocation.da
 import 'package:metrix_client/main.dart';
 import 'package:metrix_client/password_service.dart';
 import 'package:metrix_client/qr_code_screen.dart';
-import 'package:metrix_client/server_failover_service.dart';
 import 'package:wakelock_partial_android/wakelock_partial_android.dart';
 
 import 'l10n/app_localizations.dart';
@@ -78,6 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final controller = TextEditingController(text: initialValue);
     final errorMessage = AppLocalizations.of(context)!.invalidValue;
+    final imeiError = AppLocalizations.of(context)!.imeiInvalid;
     final isId = key == Preferences.id;
     // The device identifier is the phone IMEI: numeric-only, digits keyboard.
     final numeric = isInt || isId;
@@ -91,8 +91,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             content: TextField(
               controller: controller,
               keyboardType: numeric ? TextInputType.number : TextInputType.text,
-              inputFormatters:
-                  numeric ? [FilteringTextInputFormatter.digitsOnly] : [],
+              inputFormatters: [
+                if (numeric) FilteringTextInputFormatter.digitsOnly,
+                if (isId)
+                  LengthLimitingTextInputFormatter(Preferences.imeiLength),
+              ],
               decoration:
                   isId
                       ? InputDecoration(
@@ -114,7 +117,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (result != null && result.isNotEmpty) {
-      if (key == Preferences.primaryUrl || key == Preferences.fallbackUrl) {
+      if (isId && !Preferences.isValidImei(result)) {
+        messengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(imeiError)),
+        );
+        return;
+      }
+      if (key == Preferences.primaryUrl) {
         final uri = Uri.tryParse(result);
         if (uri == null ||
             uri.host.isEmpty ||
@@ -137,14 +146,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Preferences.instance.setString(key, result);
       }
       if (key == Preferences.primaryUrl) {
-        await Preferences.instance.setString(
-          Preferences.activeServer,
-          'primary',
-        );
-        await Preferences.instance.setString(Preferences.url, result);
-      } else if (key == Preferences.fallbackUrl &&
-          Preferences.instance.getString(Preferences.activeServer) ==
-              'fallback') {
         await Preferences.instance.setString(Preferences.url, result);
       }
       await bg.BackgroundGeolocation.setConfig(
@@ -287,35 +288,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             false,
           ),
           _buildListTile(
-            'Servidor principal (nuevo)',
+            AppLocalizations.of(context)!.urlLabel,
             Preferences.primaryUrl,
             false,
-          ),
-          _buildListTile(
-            'Servidor de respaldo (anterior)',
-            Preferences.fallbackUrl,
-            false,
-          ),
-          ListTile(
-            leading: const Icon(Icons.dns_outlined),
-            title: const Text('Servidor activo'),
-            subtitle: Text(
-              Preferences.instance.getString(Preferences.activeServer) ==
-                      'fallback'
-                  ? 'Respaldo · ${Preferences.activeUrl}'
-                  : 'Principal · ${Preferences.activeUrl}',
-            ),
-            trailing:
-                Preferences.instance.getString(Preferences.activeServer) ==
-                        'fallback'
-                    ? TextButton(
-                      onPressed: () async {
-                        await ServerFailoverService.usePrimary();
-                        if (mounted) setState(() {});
-                      },
-                      child: const Text('Probar principal'),
-                    )
-                    : const Icon(Icons.check_circle_outline),
           ),
           FutureBuilder<int>(
             future: bg.BackgroundGeolocation.count,

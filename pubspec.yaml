@@ -1,7 +1,7 @@
 name: metrix_client
 description: "Metrix Client"
 publish_to: 'none'
-version: 9.8.2+140
+version: 9.8.4+142
 
 environment:
   sdk: ^3.7.2

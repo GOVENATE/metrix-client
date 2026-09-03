@@ -1,15 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Ingestion is HTTPS only (https://tracking.soymetrix.com/gps/osmand/),
+         so cleartext HTTP is blocked everywhere and the platform trust store
+         (which includes the Let's Encrypt anchor) validates the server cert. -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">45.132.241.82</domain>
-        <domain includeSubdomains="false">62.72.0.169</domain>
-        <trust-anchors>
-            <certificates src="system" />
-        </trust-anchors>
-    </domain-config>
 </network-security-config>
