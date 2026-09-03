@@ -45,14 +45,16 @@ class GeolocationService {
 
   static Future<void> onEnabledChange(bool enabled) async {
     FirebaseCrashlytics.instance.log('geolocation_enabled:$enabled');
+    // Keep-alive: hold the partial wakelock for the entire tracking session,
+    // including while the device is stationary. Releasing it when parked let the
+    // CPU sleep, which delayed the heartbeat and made the server mark the device
+    // offline. Held for the session, heartbeats keep firing and reporting
+    // continues while parked.
     if (Preferences.instance.getBool(Preferences.wakelock) ?? false) {
-      if (!enabled) {
+      if (enabled && Platform.isAndroid) {
+        await WakelockPartialAndroid.acquire();
+      } else {
         await WakelockPartialAndroid.release();
-      } else if (Platform.isAndroid) {
-        final state = await bg.BackgroundGeolocation.state;
-        if (state.isMoving == true) {
-          await WakelockPartialAndroid.acquire();
-        }
       }
     }
     if (enabled) {
@@ -62,12 +64,11 @@ class GeolocationService {
 
   static Future<void> onMotionChange(bg.Location location) async {
     FirebaseCrashlytics.instance.log('geolocation_motion:${location.isMoving}');
-    if (Preferences.instance.getBool(Preferences.wakelock) ?? false) {
-      if (location.isMoving) {
-        await WakelockPartialAndroid.acquire();
-      } else {
-        await WakelockPartialAndroid.release();
-      }
+    // With keep-alive enabled the wakelock stays held even when the device goes
+    // stationary, so we only (re)acquire here and never release on stop.
+    if ((Preferences.instance.getBool(Preferences.wakelock) ?? false) &&
+        Platform.isAndroid) {
+      await WakelockPartialAndroid.acquire();
     }
   }
 
@@ -151,9 +152,10 @@ class GeolocationService {
 
     final isHighestAccuracy =
         Preferences.instance.getString(Preferences.accuracy) == 'highest';
-    final duration = DateTime.parse(
-      location.timestamp,
-    ).difference(DateTime.parse(lastLocation.timestamp)).inSeconds;
+    final duration =
+        DateTime.parse(
+          location.timestamp,
+        ).difference(DateTime.parse(lastLocation.timestamp)).inSeconds;
 
     if (!isHighestAccuracy) {
       final fastestInterval = Preferences.instance.getInt(

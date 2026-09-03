@@ -71,36 +71,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _editSetting(String title, String key, bool isInt) async {
-    final initialValue = isInt
-        ? Preferences.instance.getInt(key)?.toString() ?? '0'
-        : Preferences.instance.getString(key) ?? '';
+    final initialValue =
+        isInt
+            ? Preferences.instance.getInt(key)?.toString() ?? '0'
+            : Preferences.instance.getString(key) ?? '';
 
     final controller = TextEditingController(text: initialValue);
     final errorMessage = AppLocalizations.of(context)!.invalidValue;
+    final isId = key == Preferences.id;
+    // The device identifier is the phone IMEI: numeric-only, digits keyboard.
+    final numeric = isInt || isId;
 
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: isInt ? TextInputType.number : TextInputType.text,
-          inputFormatters: isInt
-              ? [FilteringTextInputFormatter.digitsOnly]
-              : [],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context)!.cancelButton),
+      builder:
+          (context) => AlertDialog(
+            scrollable: true,
+            title: Text(title),
+            content: TextField(
+              controller: controller,
+              keyboardType: numeric ? TextInputType.number : TextInputType.text,
+              inputFormatters:
+                  numeric ? [FilteringTextInputFormatter.digitsOnly] : [],
+              decoration:
+                  isId
+                      ? InputDecoration(
+                        hintText: AppLocalizations.of(context)!.idHint,
+                      )
+                      : null,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(AppLocalizations.of(context)!.cancelButton),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, controller.text),
+                child: Text(AppLocalizations.of(context)!.saveButton),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: Text(AppLocalizations.of(context)!.saveButton),
-          ),
-        ],
-      ),
     );
 
     if (result != null && result.isNotEmpty) {
@@ -148,26 +158,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final controller = TextEditingController();
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        scrollable: true,
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            labelText: AppLocalizations.of(context)!.passwordLabel,
+      builder:
+          (context) => AlertDialog(
+            scrollable: true,
+            content: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: AppLocalizations.of(context)!.passwordLabel,
+              ),
+              obscureText: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(AppLocalizations.of(context)!.cancelButton),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(AppLocalizations.of(context)!.saveButton),
+              ),
+            ],
           ),
-          obscureText: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppLocalizations.of(context)!.cancelButton),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppLocalizations.of(context)!.saveButton),
-          ),
-        ],
-      ),
     );
     if (result == true) {
       await PasswordService.setPassword(controller.text);
@@ -203,17 +214,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onTap: () async {
         final selectedAccuracy = await showDialog<String>(
           context: context,
-          builder: (context) => SimpleDialog(
-            title: Text(AppLocalizations.of(context)!.accuracyLabel),
-            children: accuracyOptions
-                .map(
-                  (option) => SimpleDialogOption(
-                    child: Text(_getAccuracyLabel(option)),
-                    onPressed: () => Navigator.pop(context, option),
-                  ),
-                )
-                .toList(),
-          ),
+          builder:
+              (context) => SimpleDialog(
+                title: Text(AppLocalizations.of(context)!.accuracyLabel),
+                children:
+                    accuracyOptions
+                        .map(
+                          (option) => SimpleDialogOption(
+                            child: Text(_getAccuracyLabel(option)),
+                            onPressed: () => Navigator.pop(context, option),
+                          ),
+                        )
+                        .toList(),
+              ),
         );
         if (selectedAccuracy != null) {
           await Preferences.instance.setString(
@@ -294,25 +307,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             trailing:
                 Preferences.instance.getString(Preferences.activeServer) ==
-                    'fallback'
-                ? TextButton(
-                    onPressed: () async {
-                      await ServerFailoverService.usePrimary();
-                      if (mounted) setState(() {});
-                    },
-                    child: const Text('Probar principal'),
-                  )
-                : const Icon(Icons.check_circle_outline),
+                        'fallback'
+                    ? TextButton(
+                      onPressed: () async {
+                        await ServerFailoverService.usePrimary();
+                        if (mounted) setState(() {});
+                      },
+                      child: const Text('Probar principal'),
+                    )
+                    : const Icon(Icons.check_circle_outline),
           ),
           FutureBuilder<int>(
             future: bg.BackgroundGeolocation.count,
-            builder: (context, snapshot) => ListTile(
-              leading: const Icon(Icons.cloud_upload_outlined),
-              title: const Text('Cola de envío protegida'),
-              subtitle: Text(
-                '${snapshot.data ?? 0} posiciones pendientes. Se enviarán automáticamente al regresar la red.',
-              ),
-            ),
+            builder:
+                (context, snapshot) => ListTile(
+                  leading: const Icon(Icons.cloud_upload_outlined),
+                  title: const Text('Cola de envío protegida'),
+                  subtitle: Text(
+                    '${snapshot.data ?? 0} posiciones pendientes. Se enviarán automáticamente al regresar la red.',
+                  ),
+                ),
           ),
           _buildAccuracyListTile(),
           _buildListTile(
@@ -358,8 +372,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: (value) async {
                 await Preferences.instance.setBool(Preferences.wakelock, value);
                 if (value) {
+                  // Hold for the whole session while tracking is running,
+                  // regardless of motion, so parked devices keep reporting.
                   final state = await bg.BackgroundGeolocation.state;
-                  if (state.isMoving == true) {
+                  if (state.enabled) {
                     WakelockPartialAndroid.acquire();
                   }
                 } else {
