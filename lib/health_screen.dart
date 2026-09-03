@@ -63,6 +63,7 @@ class _HealthScreenState extends State<HealthScreen> {
         await HealthService.requestNotifications();
       case HealthCheckId.battery:
         await HealthService.requestBattery();
+      case HealthCheckId.deviceId:
       case HealthCheckId.serverUrl:
         if (await PasswordService.authenticate(context) && mounted) {
           await Navigator.push(
@@ -180,7 +181,9 @@ class _HealthScreenState extends State<HealthScreen> {
         leading: Icon(_statusIcon(check.status), color: color),
         title: Text(_checkTitle(l10n, check.id)),
         subtitle: Text(_checkSubtitle(l10n, check)),
-        isThreeLine: check.id == HealthCheckId.serverUrl,
+        isThreeLine:
+            check.id == HealthCheckId.serverUrl ||
+            check.id == HealthCheckId.deviceId,
         trailing:
             check.status == HealthStatus.ok
                 ? Icon(Icons.check, color: Brand.green)
@@ -215,6 +218,7 @@ class _HealthScreenState extends State<HealthScreen> {
 
   String _checkTitle(AppLocalizations l10n, HealthCheckId id) => switch (id) {
     HealthCheckId.tracking => l10n.checkTrackingTitle,
+    HealthCheckId.deviceId => l10n.checkDeviceIdTitle,
     HealthCheckId.location => l10n.checkLocationTitle,
     HealthCheckId.activity => l10n.checkActivityTitle,
     HealthCheckId.notifications => l10n.checkNotificationsTitle,
@@ -229,6 +233,14 @@ class _HealthScreenState extends State<HealthScreen> {
         return check.status == HealthStatus.ok
             ? l10n.checkTrackingOk
             : l10n.checkTrackingError;
+      case HealthCheckId.deviceId:
+        final id = check.info ?? '';
+        if (check.status == HealthStatus.ok) {
+          return id.isEmpty ? l10n.checkDeviceIdOk : '$id\n${l10n.checkDeviceIdOk}';
+        }
+        return id.isEmpty
+            ? l10n.checkDeviceIdWarning
+            : '$id\n${l10n.checkDeviceIdWarning}';
       case HealthCheckId.location:
         return switch (check.status) {
           HealthStatus.ok => l10n.checkLocationOk,

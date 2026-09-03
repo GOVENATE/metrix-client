@@ -9,7 +9,6 @@ import 'package:flutter_background_geolocation/flutter_background_geolocation.da
 import 'package:metrix_client/location_cache.dart';
 import 'package:metrix_client/notification_service.dart';
 import 'package:metrix_client/preferences.dart';
-import 'package:metrix_client/server_failover_service.dart';
 import 'package:wakelock_partial_android/wakelock_partial_android.dart';
 
 class GeolocationService {
@@ -33,6 +32,7 @@ class GeolocationService {
   /// diagnostics screen can tell whether the device is still reporting.
   static Future<void> onHttp(bg.HttpEvent event) async {
     FirebaseCrashlytics.instance.log('geolocation_http:${event.status}');
+    await Preferences.instance.setInt(Preferences.lastHttpStatus, event.status);
     if (event.success) {
       await Preferences.instance.setInt(
         Preferences.lastSync,
@@ -40,7 +40,6 @@ class GeolocationService {
       );
       await NotificationService.clearTrackingStalled();
     }
-    await ServerFailoverService.handleHttp(event);
   }
 
   static Future<void> onEnabledChange(bool enabled) async {

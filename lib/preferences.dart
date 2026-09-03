@@ -17,10 +17,15 @@ class Preferences {
 
   /// Server the field devices must report to. Used by the diagnostics screen to
   /// flag misconfigured devices and as the default for fresh installs.
-  static const String defaultPrimaryUrl = 'http://45.132.241.82:7055';
-  static const String defaultFallbackUrl = 'http://62.72.0.169:6055';
+  ///
+  /// Public ingestion endpoint: Apache terminates TLS for
+  /// tracking.soymetrix.com and reverse-proxies `/gps/osmand/` to the Traccar
+  /// OsmAnd port bound to 127.0.0.1:7055. The trailing slash is required — the
+  /// `ProxyPass "/gps/osmand/"` rule only matches paths that keep it.
+  static const String defaultPrimaryUrl =
+      'https://tracking.soymetrix.com/gps/osmand/';
   static const String expectedUrl = defaultPrimaryUrl;
-  static const int trackingProfileVersion = 3;
+  static const int trackingProfileVersion = 5;
 
   /// How long the device may go without a successful upload before the watchdog
   /// warns the user that tracking has stalled (seconds).
@@ -32,14 +37,22 @@ class Preferences {
   static Future<void>? _initFuture;
   static late SharedPreferencesWithCache instance;
 
+  /// A phone IMEI is exactly 15 decimal digits. The identifier is entered
+  /// manually in the field, so this is the single source of truth used both to
+  /// validate the input and to flag provisional identifiers in diagnostics.
+  static const int imeiLength = 15;
+
+  /// True when [value] is a syntactically valid IMEI (exactly 15 digits).
+  /// Fresh installs seed a shorter provisional number, so this is what tells
+  /// the app whether the operator has entered the real device IMEI yet.
+  static bool isValidImei(String? value) {
+    if (value == null || value.length != imeiLength) return false;
+    return RegExp(r'^\d{15}$').hasMatch(value);
+  }
+
   static const String id = 'id';
   static const String url = 'url';
   static const String primaryUrl = 'primary_url';
-  static const String fallbackUrl = 'fallback_url';
-  static const String activeServer = 'active_server';
-  static const String serverFailures = 'server_failures';
-  static const String lastServerSwitch = 'last_server_switch';
-  static const String lastSuccessfulServer = 'last_successful_server';
   static const String lastHttpStatus = 'last_http_status';
   static const String profileVersion = 'tracking_profile_version';
   static const String accuracy = 'accuracy';
@@ -78,11 +91,6 @@ class Preferences {
           id,
           url,
           primaryUrl,
-          fallbackUrl,
-          activeServer,
-          serverFailures,
-          lastServerSwitch,
-          lastSuccessfulServer,
           lastHttpStatus,
           profileVersion,
           accuracy,
@@ -112,8 +120,6 @@ class Preferences {
       );
       await instance.setString(url, expectedUrl);
       await instance.setString(primaryUrl, defaultPrimaryUrl);
-      await instance.setString(fallbackUrl, defaultFallbackUrl);
-      await instance.setString(activeServer, 'primary');
       await instance.setString(accuracy, 'high');
       await instance.setInt(interval, defaultInterval);
       await instance.setInt(distance, defaultDistance);
@@ -133,19 +139,13 @@ class Preferences {
     if (instance.getString(primaryUrl) == null) {
       await instance.setString(primaryUrl, defaultPrimaryUrl);
     }
-    if (instance.getString(fallbackUrl) == null) {
-      await instance.setString(fallbackUrl, defaultFallbackUrl);
-    }
-    if (instance.getString(activeServer) == null) {
-      await instance.setString(activeServer, 'primary');
-    }
 
     final currentProfile = instance.getInt(profileVersion) ?? 0;
     if (currentProfile < trackingProfileVersion) {
+      // Single-server migration: devices that had failed over to the retired
+      // fallback VPS are pulled back to the one active server.
       await instance.setString(primaryUrl, defaultPrimaryUrl);
-      await instance.setString(activeServer, 'primary');
       await instance.setString(url, defaultPrimaryUrl);
-      await instance.setInt(serverFailures, 0);
       await instance.setString(accuracy, 'high');
       await instance.setInt(interval, defaultInterval);
       await instance.setInt(distance, defaultDistance);
@@ -250,7 +250,7 @@ class Preferences {
         autoSync: true,
         autoSyncThreshold: 1,
         batchSync: false,
-        url: _formatUrl(activeUrl),
+        url: _formatUrl(serverUrl),
         params: {'device_id': instance.getString(id)},
         headers: const {'X-Metrix-Client': 'android-9.8'},
         timeout: 30,
@@ -271,11 +271,9 @@ class Preferences {
     );
   }
 
-  static String get activeUrl {
-    final selected = instance.getString(activeServer) ?? 'primary';
-    final key = selected == 'fallback' ? fallbackUrl : primaryUrl;
-    return instance.getString(key) ?? defaultPrimaryUrl;
-  }
+  /// The single ingestion server every device reports to.
+  static String get serverUrl =>
+      instance.getString(primaryUrl) ?? defaultPrimaryUrl;
 
   static String? _formatUrl(String? url) {
     if (url == null) return null;
