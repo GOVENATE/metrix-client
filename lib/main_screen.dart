@@ -309,9 +309,7 @@ class _MainScreenState extends State<MainScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(AppLocalizations.of(context)!.urlLabel),
-              subtitle: Text(
-                '${Preferences.instance.getString(Preferences.activeServer) == 'fallback' ? 'Respaldo' : 'Principal'} · ${Preferences.activeUrl}',
-              ),
+              subtitle: Text(Preferences.serverUrl),
             ),
             const SizedBox(height: 8),
             OverflowBar(

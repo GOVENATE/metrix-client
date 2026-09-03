@@ -14,15 +14,10 @@ class ConfigurationService {
       if (url != null) {
         await Preferences.instance.setString(Preferences.primaryUrl, url);
       }
-      final fallback = parameters['fallback_url'];
-      if (fallback != null) {
-        await Preferences.instance.setString(Preferences.fallbackUrl, fallback);
-      }
     }
-    await Preferences.instance.setString(Preferences.activeServer, 'primary');
     await Preferences.instance.setString(
       Preferences.url,
-      Preferences.activeUrl,
+      Preferences.serverUrl,
     );
     await _applyStringParameter(parameters, Preferences.id);
     await _applyStringParameter(parameters, Preferences.accuracy);
