@@ -1,18 +1,29 @@
-import 'package:flutter_background_geolocation/flutter_background_geolocation.dart' as bg;
+import 'package:flutter_background_geolocation/flutter_background_geolocation.dart'
+    as bg;
 
 import 'preferences.dart';
 
 class ConfigurationService {
   static Future<void> applyUri(Uri uri) async {
+    final parameters = uri.queryParameters;
     if (uri.scheme == 'http' || uri.scheme == 'https') {
-      await Preferences.instance.setString(Preferences.url, '${uri.origin}${uri.path}');
+      final value = '${uri.origin}${uri.path}';
+      await Preferences.instance.setString(Preferences.primaryUrl, value);
     } else {
-      final url = uri.queryParameters['url'];
+      final url = parameters['primary_url'] ?? parameters['url'];
       if (url != null) {
-        await Preferences.instance.setString(Preferences.url, url);
+        await Preferences.instance.setString(Preferences.primaryUrl, url);
+      }
+      final fallback = parameters['fallback_url'];
+      if (fallback != null) {
+        await Preferences.instance.setString(Preferences.fallbackUrl, fallback);
       }
     }
-    final parameters = uri.queryParameters;
+    await Preferences.instance.setString(Preferences.activeServer, 'primary');
+    await Preferences.instance.setString(
+      Preferences.url,
+      Preferences.activeUrl,
+    );
     await _applyStringParameter(parameters, Preferences.id);
     await _applyStringParameter(parameters, Preferences.accuracy);
     await _applyIntParameter(parameters, Preferences.distance);
@@ -20,14 +31,19 @@ class ConfigurationService {
     await _applyIntParameter(parameters, Preferences.angle);
     await _applyIntParameter(parameters, Preferences.heartbeat);
     await _applyIntParameter(parameters, Preferences.fastestInterval);
-    await _applyBoolParameter(parameters, Preferences.buffer);
     await _applyBoolParameter(parameters, Preferences.wakelock);
     await _applyBoolParameter(parameters, Preferences.stopDetection);
-    await bg.BackgroundGeolocation.setConfig(Preferences.geolocationConfig(true));
+    await Preferences.instance.setBool(Preferences.buffer, true);
+    await bg.BackgroundGeolocation.setConfig(
+      Preferences.geolocationConfig(false),
+    );
+    await bg.BackgroundGeolocation.sync();
   }
 
   static Future<void> _applyStringParameter(
-      Map<String, String> parameters, String key) async {
+    Map<String, String> parameters,
+    String key,
+  ) async {
     final value = parameters[key];
     if (value != null) {
       await Preferences.instance.setString(key, value);
@@ -35,7 +51,9 @@ class ConfigurationService {
   }
 
   static Future<void> _applyIntParameter(
-      Map<String, String> parameters, String key) async {
+    Map<String, String> parameters,
+    String key,
+  ) async {
     final stringValue = parameters[key];
     if (stringValue != null) {
       final value = int.tryParse(stringValue);
@@ -46,7 +64,9 @@ class ConfigurationService {
   }
 
   static Future<void> _applyBoolParameter(
-      Map<String, String> parameters, String key) async {
+    Map<String, String> parameters,
+    String key,
+  ) async {
     final value = parameters[key];
     if (value != null) {
       switch (value) {

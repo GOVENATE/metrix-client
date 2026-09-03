@@ -9,6 +9,7 @@ import 'package:flutter_background_geolocation/flutter_background_geolocation.da
 import 'package:metrix_client/location_cache.dart';
 import 'package:metrix_client/notification_service.dart';
 import 'package:metrix_client/preferences.dart';
+import 'package:metrix_client/server_failover_service.dart';
 import 'package:wakelock_partial_android/wakelock_partial_android.dart';
 
 class GeolocationService {
@@ -39,6 +40,7 @@ class GeolocationService {
       );
       await NotificationService.clearTrackingStalled();
     }
+    await ServerFailoverService.handleHttp(event);
   }
 
   static Future<void> onEnabledChange(bool enabled) async {
@@ -149,10 +151,9 @@ class GeolocationService {
 
     final isHighestAccuracy =
         Preferences.instance.getString(Preferences.accuracy) == 'highest';
-    final duration =
-        DateTime.parse(
-          location.timestamp,
-        ).difference(DateTime.parse(lastLocation.timestamp)).inSeconds;
+    final duration = DateTime.parse(
+      location.timestamp,
+    ).difference(DateTime.parse(lastLocation.timestamp)).inSeconds;
 
     if (!isHighestAccuracy) {
       final fastestInterval = Preferences.instance.getInt(

@@ -69,22 +69,19 @@ class _MainScreenState extends State<MainScreen> {
         if (!request.seen && context.mounted) {
           showDialog(
             context: context,
-            builder:
-                (_) => AlertDialog(
-                  scrollable: true,
-                  content: Text(
-                    AppLocalizations.of(context)!.optimizationMessage,
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        bg.DeviceSettings.show(request);
-                      },
-                      child: Text(AppLocalizations.of(context)!.okButton),
-                    ),
-                  ],
+            builder: (_) => AlertDialog(
+              scrollable: true,
+              content: Text(AppLocalizations.of(context)!.optimizationMessage),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    bg.DeviceSettings.show(request);
+                  },
+                  child: Text(AppLocalizations.of(context)!.okButton),
                 ),
+              ],
+            ),
           );
         }
       }
@@ -211,10 +208,9 @@ class _MainScreenState extends State<MainScreen> {
               contentPadding: EdgeInsets.zero,
               title: Text(AppLocalizations.of(context)!.trackingLabel),
               value: trackingEnabled,
-              activeTrackColor:
-                  isMoving == false
-                      ? Theme.of(context).colorScheme.secondary
-                      : null,
+              activeTrackColor: isMoving == false
+                  ? Theme.of(context).colorScheme.secondary
+                  : null,
               onChanged: (bool value) async {
                 if (await PasswordService.authenticate(context) && mounted) {
                   if (value) {
@@ -241,19 +237,16 @@ class _MainScreenState extends State<MainScreen> {
                         SnackBar(
                           content: Text(error.message ?? error.code),
                           duration: const Duration(seconds: 4),
-                          action:
-                              isPermissionError
-                                  ? SnackBarAction(
-                                    label:
-                                        AppLocalizations.of(
-                                          context,
-                                        )!.settingsTitle,
-                                    onPressed:
-                                        () => AppSettings.openAppSettings(
-                                          type: AppSettingsType.settings,
-                                        ),
-                                  )
-                                  : null,
+                          action: isPermissionError
+                              ? SnackBarAction(
+                                  label: AppLocalizations.of(
+                                    context,
+                                  )!.settingsTitle,
+                                  onPressed: () => AppSettings.openAppSettings(
+                                    type: AppSettingsType.settings,
+                                  ),
+                                )
+                              : null,
                         ),
                       );
                     }
@@ -317,7 +310,7 @@ class _MainScreenState extends State<MainScreen> {
               contentPadding: EdgeInsets.zero,
               title: Text(AppLocalizations.of(context)!.urlLabel),
               subtitle: Text(
-                Preferences.instance.getString(Preferences.url) ?? '',
+                '${Preferences.instance.getString(Preferences.activeServer) == 'fallback' ? 'Respaldo' : 'Principal'} · ${Preferences.activeUrl}',
               ),
             ),
             const SizedBox(height: 8),

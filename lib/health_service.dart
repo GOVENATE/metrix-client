@@ -79,8 +79,9 @@ class HealthService {
     }
     final whenInUse = await Permission.locationWhenInUse.status;
     // Foreground granted but not "all the time" — tracking dies in background.
-    final status =
-        whenInUse.isGranted ? HealthStatus.warning : HealthStatus.error;
+    final status = whenInUse.isGranted
+        ? HealthStatus.warning
+        : HealthStatus.error;
     return HealthCheck(HealthCheckId.location, status);
   }
 
@@ -103,28 +104,42 @@ class HealthService {
   }
 
   static HealthCheck _serverUrlCheck() {
-    final url = Preferences.instance.getString(Preferences.url);
-    if (url == null || url.isEmpty) {
+    final primary = Preferences.instance.getString(Preferences.primaryUrl);
+    final fallback = Preferences.instance.getString(Preferences.fallbackUrl);
+    if (primary == null ||
+        primary.isEmpty ||
+        fallback == null ||
+        fallback.isEmpty) {
       return const HealthCheck(HealthCheckId.serverUrl, HealthStatus.error);
     }
-    final uri = Uri.tryParse(url);
-    final isValid =
-        uri != null &&
-        uri.host.isNotEmpty &&
-        (uri.scheme == 'http' || uri.scheme == 'https');
+    final isValid = _validServer(primary) && _validServer(fallback);
+    final active =
+        Preferences.instance.getString(Preferences.activeServer) == 'fallback'
+        ? 'Respaldo'
+        : 'Principal';
+    final info = 'Principal: $primary\nRespaldo: $fallback\nActivo: $active';
     if (!isValid) {
       return HealthCheck(
         HealthCheckId.serverUrl,
         HealthStatus.error,
-        info: url,
+        info: info,
       );
     }
-    final matches = _sameServer(url, Preferences.expectedUrl);
+    final matches =
+        _sameServer(primary, Preferences.defaultPrimaryUrl) &&
+        _sameServer(fallback, Preferences.defaultFallbackUrl);
     return HealthCheck(
       HealthCheckId.serverUrl,
       matches ? HealthStatus.ok : HealthStatus.warning,
-      info: url,
+      info: info,
     );
+  }
+
+  static bool _validServer(String value) {
+    final uri = Uri.tryParse(value);
+    return uri != null &&
+        uri.host.isNotEmpty &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
   }
 
   static Future<HealthCheck> _uploadCheck(bool trackingEnabled) async {
@@ -144,11 +159,7 @@ class HealthService {
     } else {
       status = HealthStatus.error;
     }
-    return HealthCheck(
-      HealthCheckId.upload,
-      status,
-      info: seconds.toString(),
-    );
+    return HealthCheck(HealthCheckId.upload, status, info: seconds.toString());
   }
 
   // --- Repair actions -------------------------------------------------------

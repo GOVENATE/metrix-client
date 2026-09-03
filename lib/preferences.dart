@@ -7,17 +7,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_android/shared_preferences_android.dart';
 
 class Preferences {
-  static const int defaultInterval = 60;
-  static const int defaultDistance = 25;
+  static const int defaultInterval = 15;
+  static const int defaultDistance = 10;
   static const int defaultHeartbeat = 60;
-  static const int defaultFastestInterval = 15;
+  static const int defaultFastestInterval = 5;
   static const int legacyDefaultInterval = 300;
   static const int legacyDefaultDistance = 75;
   static const int legacyDefaultFastestInterval = 30;
 
   /// Server the field devices must report to. Used by the diagnostics screen to
   /// flag misconfigured devices and as the default for fresh installs.
-  static const String expectedUrl = 'http://45.132.241.82:6055';
+  static const String defaultPrimaryUrl = 'http://45.132.241.82:7055';
+  static const String defaultFallbackUrl = 'http://62.72.0.169:6055';
+  static const String expectedUrl = defaultPrimaryUrl;
+  static const int trackingProfileVersion = 3;
 
   /// How long the device may go without a successful upload before the watchdog
   /// warns the user that tracking has stalled (seconds).
@@ -31,6 +34,14 @@ class Preferences {
 
   static const String id = 'id';
   static const String url = 'url';
+  static const String primaryUrl = 'primary_url';
+  static const String fallbackUrl = 'fallback_url';
+  static const String activeServer = 'active_server';
+  static const String serverFailures = 'server_failures';
+  static const String lastServerSwitch = 'last_server_switch';
+  static const String lastSuccessfulServer = 'last_successful_server';
+  static const String lastHttpStatus = 'last_http_status';
+  static const String profileVersion = 'tracking_profile_version';
   static const String accuracy = 'accuracy';
   static const String distance = 'distance';
   static const String interval = 'interval';
@@ -57,17 +68,23 @@ class Preferences {
 
   static Future<void> _createInstance() async {
     instance = await SharedPreferencesWithCache.create(
-      sharedPreferencesOptions:
-          Platform.isAndroid
-              ? SharedPreferencesAsyncAndroidOptions(
-                backend:
-                    SharedPreferencesAndroidBackendLibrary.SharedPreferences,
-              )
-              : SharedPreferencesOptions(),
+      sharedPreferencesOptions: Platform.isAndroid
+          ? SharedPreferencesAsyncAndroidOptions(
+              backend: SharedPreferencesAndroidBackendLibrary.SharedPreferences,
+            )
+          : SharedPreferencesOptions(),
       cacheOptions: SharedPreferencesWithCacheOptions(
         allowList: {
           id,
           url,
+          primaryUrl,
+          fallbackUrl,
+          activeServer,
+          serverFailures,
+          lastServerSwitch,
+          lastSuccessfulServer,
+          lastHttpStatus,
+          profileVersion,
           accuracy,
           distance,
           interval,
@@ -94,21 +111,49 @@ class Preferences {
         (Random().nextInt(90000000) + 10000000).toString(),
       );
       await instance.setString(url, expectedUrl);
-      await instance.setString(accuracy, 'medium');
+      await instance.setString(primaryUrl, defaultPrimaryUrl);
+      await instance.setString(fallbackUrl, defaultFallbackUrl);
+      await instance.setString(activeServer, 'primary');
+      await instance.setString(accuracy, 'high');
       await instance.setInt(interval, defaultInterval);
       await instance.setInt(distance, defaultDistance);
       await instance.setInt(heartbeat, defaultHeartbeat);
       await instance.setBool(buffer, true);
-      await instance.setBool(stopDetection, false);
+      await instance.setBool(stopDetection, true);
       await instance.setBool(wakelock, Platform.isAndroid);
       await instance.setBool(watchdog, true);
       await instance.setInt(fastestInterval, defaultFastestInterval);
+      await instance.setInt(profileVersion, trackingProfileVersion);
     } else {
       await _applyReliableTrackingDefaults();
     }
   }
 
   static Future<void> _applyReliableTrackingDefaults() async {
+    if (instance.getString(primaryUrl) == null) {
+      await instance.setString(primaryUrl, defaultPrimaryUrl);
+    }
+    if (instance.getString(fallbackUrl) == null) {
+      await instance.setString(fallbackUrl, defaultFallbackUrl);
+    }
+    if (instance.getString(activeServer) == null) {
+      await instance.setString(activeServer, 'primary');
+    }
+
+    final currentProfile = instance.getInt(profileVersion) ?? 0;
+    if (currentProfile < trackingProfileVersion) {
+      await instance.setString(primaryUrl, defaultPrimaryUrl);
+      await instance.setString(activeServer, 'primary');
+      await instance.setString(url, defaultPrimaryUrl);
+      await instance.setInt(serverFailures, 0);
+      await instance.setString(accuracy, 'high');
+      await instance.setInt(interval, defaultInterval);
+      await instance.setInt(distance, defaultDistance);
+      await instance.setInt(fastestInterval, defaultFastestInterval);
+      await instance.setBool(stopDetection, true);
+      await instance.setBool(buffer, true);
+      await instance.setInt(profileVersion, trackingProfileVersion);
+    }
     final currentInterval = instance.getInt(interval);
     if (currentInterval == null || currentInterval == legacyDefaultInterval) {
       await instance.setInt(interval, defaultInterval);
@@ -129,9 +174,9 @@ class Preferences {
     if (instance.getBool(wakelock) == null && Platform.isAndroid) {
       await instance.setBool(wakelock, true);
     }
-    if (instance.getBool(stopDetection) != false) {
-      await instance.setBool(stopDetection, false);
-    }
+    // The native SDK database is the durable outbox. It must never be disabled:
+    // queued fixes survive loss of signal, process termination and device reboot.
+    if (instance.getBool(buffer) != true) await instance.setBool(buffer, true);
     if (instance.getBool(watchdog) == null) {
       await instance.setBool(watchdog, true);
     }
@@ -155,21 +200,22 @@ class Preferences {
           'low' => bg.DesiredAccuracy.low,
           _ => bg.DesiredAccuracy.medium,
         },
-        distanceFilter:
-            isHighestAccuracy ? 0 : instance.getInt(distance)?.toDouble(),
-        locationUpdateInterval:
-            Platform.isAndroid
-                ? (isHighestAccuracy
-                    ? 0
-                    : (locationUpdateInterval > 0
+        distanceFilter: isHighestAccuracy
+            ? 0
+            : instance.getInt(distance)?.toDouble(),
+        locationUpdateInterval: Platform.isAndroid
+            ? (isHighestAccuracy
+                  ? 0
+                  : (locationUpdateInterval > 0
                         ? locationUpdateInterval
                         : null))
-                : null,
-        fastestLocationUpdateInterval:
-            Platform.isAndroid
-                ? (isHighestAccuracy ? 0 : fastestLocationUpdateInterval)
-                : null,
-        disableElasticity: true,
+            : null,
+        fastestLocationUpdateInterval: Platform.isAndroid
+            ? (isHighestAccuracy ? 0 : fastestLocationUpdateInterval)
+            : null,
+        disableElasticity: false,
+        stationaryRadius: 25,
+        stopTimeout: 5,
         locationAuthorizationRequest: Platform.isIOS ? 'Always' : null,
         pausesLocationUpdatesAutomatically: false,
         showsBackgroundLocationIndicator: Platform.isIOS ? false : null,
@@ -178,35 +224,36 @@ class Preferences {
         enableHeadless: Platform.isAndroid ? true : null,
         stopOnTerminate: false,
         startOnBoot: true,
-        heartbeatInterval:
-            heartbeatInterval > 0 ? heartbeatInterval.toDouble() : null,
+        heartbeatInterval: heartbeatInterval > 0
+            ? heartbeatInterval.toDouble()
+            : null,
         preventSuspend: Platform.isIOS ? (heartbeatInterval > 0) : null,
-        backgroundPermissionRationale:
-            Platform.isAndroid
-                ? bg.PermissionRationale(
-                  title:
-                      'Allow {applicationName} to access this device\'s location in the background',
-                  message:
-                      'For reliable tracking, please enable {backgroundPermissionOptionLabel} location access.',
-                  positiveAction: 'Change to {backgroundPermissionOptionLabel}',
-                  negativeAction: 'Cancel',
-                )
-                : null,
-        notification:
-            Platform.isAndroid
-                ? bg.Notification(
-                  smallIcon: 'drawable/ic_stat_notify',
-                  priority: bg.NotificationPriority.defaultPriority,
-                  sticky: true,
-                )
-                : null,
+        backgroundPermissionRationale: Platform.isAndroid
+            ? bg.PermissionRationale(
+                title:
+                    'Allow {applicationName} to access this device\'s location in the background',
+                message:
+                    'For reliable tracking, please enable {backgroundPermissionOptionLabel} location access.',
+                positiveAction: 'Change to {backgroundPermissionOptionLabel}',
+                negativeAction: 'Cancel',
+              )
+            : null,
+        notification: Platform.isAndroid
+            ? bg.Notification(
+                smallIcon: 'drawable/ic_stat_notify',
+                priority: bg.NotificationPriority.defaultPriority,
+                sticky: true,
+              )
+            : null,
       ),
       http: bg.HttpConfig(
         autoSync: true,
         autoSyncThreshold: 1,
         batchSync: false,
-        url: _formatUrl(instance.getString(url)),
+        url: _formatUrl(activeUrl),
         params: {'device_id': instance.getString(id)},
+        headers: const {'X-Metrix-Client': 'android-9.8'},
+        timeout: 30,
       ),
       logger: const bg.LoggerConfig(
         logLevel: bg.LogLevel.verbose,
@@ -214,12 +261,20 @@ class Preferences {
       ),
       activity: bg.ActivityConfig(
         disableStopDetection: instance.getBool(stopDetection) == false,
+        activityRecognitionInterval: 10000,
+        minimumActivityRecognitionConfidence: 70,
       ),
       persistence: bg.PersistenceConfig(
-        maxRecordsToPersist: instance.getBool(buffer) != false ? -1 : 1,
+        maxRecordsToPersist: -1,
         locationTemplate: _locationTemplate(),
       ),
     );
+  }
+
+  static String get activeUrl {
+    final selected = instance.getString(activeServer) ?? 'primary';
+    final key = selected == 'fallback' ? fallbackUrl : primaryUrl;
+    return instance.getString(key) ?? defaultPrimaryUrl;
   }
 
   static String? _formatUrl(String? url) {
@@ -233,6 +288,7 @@ class Preferences {
 
   static String _locationTemplate() {
     return '''{
+      "uuid": "<%= uuid %>",
       "timestamp": "<%= timestamp %>",
       "coords": {
         "latitude": <%= latitude %>,
@@ -252,8 +308,11 @@ class Preferences {
       "activity": {
         "type": "<%= activity.type %>"
       },
-      "extras": {},
-      "_": "&id=${instance.getString(id)}&lat=<%= latitude %>&lon=<%= longitude %>&timestamp=<%= timestamp %>&"
-    }'''.split('\n').map((line) => line.trimLeft()).join();
+      "extras": {"position_uuid": "<%= uuid %>", "source": "metrix_mobile"},
+      "_": "&id=${instance.getString(id)}&lat=<%= latitude %>&lon=<%= longitude %>&timestamp=<%= timestamp %>&accuracy=<%= accuracy %>&uuid=<%= uuid %>&"
+    }'''
+        .split('\n')
+        .map((line) => line.trimLeft())
+        .join();
   }
 }
